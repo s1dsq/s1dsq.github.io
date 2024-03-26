@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="color-scheme" content="dark light">
+	<link rel="icon" href="data:,">
+	<title>Siddharth's blog</title>
+	<link href="https://s1dsq.github.io/atom.xml" type="application/atom+xml" rel="alternate" title="Atom feed for blog posts" />
+	<style>
+		* {
+			box-sizing: border-box;
+		}
+		body {
+			font-family: sans-serif;
+      font-size: 1.3rem;
+			line-height: 1.45;
+			margin: 0 auto;
+			max-width: 52rem;
+			padding: 0 15px;
+		}
+		hr {
+			background-color: grey;
+			border: 0;
+			height: 1px;
+			margin: 2rem 0;
+		}
+		nav {
+			margin: 2rem 0 0;
+		}
+		main {
+			hyphens: auto;
+		}
+		main p {
+			margin: 1rem;
+		}
+		h1,h2,h3,h4 {
+			margin: 2rem 0 0;
+		}
+		h1 {
+			margin-bottom: 0.5rem;
+		}
+		h1 + p {
+			margin: 0 0 1rem;
+		}
+		span.created {
+			display: block;
+			margin: 30px 15px;
+		}
+		img {
+			border: 1px solid lightgrey;
+			height: auto;
+			max-width: 100%;
+			width: auto;
+		}
+		blockquote {
+			border: 1px solid;
+			border-left: 6px solid;
+			margin: 2rem 0;
+			padding: 10px;
+		}
+		blockquote p {
+			margin: 0;
+		}
+		figure {
+			margin: 2rem 0;
+		}
+		figcaption {
+			color: slategrey;
+		}
+		code {
+			border: 1px solid;
+			padding: 0.1rem 0.3rem;
+			tab-size: 4;
+		}
+		pre {
+			border: 1px solid;
+		}
+		pre code {
+			border: 0;
+			display: block;
+			overflow-x: auto;
+			padding: 0.3rem 0.6rem;
+		}
+		table {
+			border-collapse: collapse;
+			margin: 2rem 0;
+			text-align: left;
+			width: 100%;
+		}
+		tr {
+			border-bottom: 1px solid lightgrey;
+		}
+		tr:nth-of-type(odd) td {
+			background-color: #f8f8f8;
+		}
+		th,td {
+			padding: 6px;
+		}
+		footer {
+			border-top: 1px dashed grey;
+			margin: 2rem 0;
+			padding: 1rem 15px;
+		}
+		@supports (color-scheme: dark light) {
+			@media screen and (prefers-color-scheme: dark) {
+				a:link {color: #9e9eff;}
+				a:visited {color: #d0adf0;}
+				a:active {color: red;}
+			}
+		}
+	</style>
+</head>
+
+<nav>
+	<a href="/">Home</a><span> | </span><a href="/about">About</a><span> | </span><a href="/contact">Contact</a>
+</nav>
+
+<main>
+<h1>Writing a primitive version of git</h1>
+<p>2024-03-24</p>
+<p>Most of us use the git version control everyday. Git has a bad UI as many people
+have complained on the internet before. But understanding the internals allows
+us to better use this piece of software on a day to day basis. Also, it helps
+demystify the "magic" a little bit.</p>
+<p>In this post, we will write a very basic version of git in golang that we can
+push to github as a remote using the git command line. Along the way we will
+understand how git stores objects on disk which is the secret sauce to the dish
+that is git.</p>
+<h2>What is git?</h2>
+<p>At its core, git is a content-addressable filesystem. This means it is a key
+value store on disk. You can store any content on disk and address it using a
+key that git gives you. If we tap into this store and write data to it manually
+using our program, we can make git think that we ran a bunch of porcelain
+commands (git init, git checkout etc. Basically any user-friendly
+command)</p>
+<p>Git store all of this key-value information and more in a <code>.git</code> directory in
+the root of your repository. This is automatically created when we run <code>git
+init</code> to initialize a new repository.</p>
+<h2>What?</h2>
+<p>Here is what we want to do:</p>
+<ul>
+<li>Initialize a new git repository</li>
+<li>Create a new file with some content</li>
+<li>Add one commit to the master branch where we add the file</li>
+</ul>
+<p>This will give us enough to push the repository to github as a remote</p>
+<h2>How?</h2>
+<p>Our script does the following:</p>
+<ul>
+<li>Create a <code>HEAD</code> file at <code>.git/HEAD</code></li>
+<li>Create blob -&gt; tree -&gt; commit objects in <code>.git/objects</code></li>
+<li>Create a ref file at <code>.git/refs/heads/master</code> to point to the commit we
+created</li>
+</ul>
+<p>Now we go into detail for each of the steps outlined above.</p>
+<h3>The HEAD</h3>
+<p>The HEAD is a pointer to a reference which is a currently checked out in our
+repo. We can change where HEAD points to using commands like <code>git checkout</code> or
+<code>git switch</code></p>
+<p>We point HEAD to the <code>master</code> branch. Here is the code to do that:</p>
+<pre><code class="language-go">err := os.WriteFile(filepath.Join(&quot;.git&quot;, &quot;HEAD&quot;), []byte(&quot;ref: refs/heads/master\n&quot;), 0644)
+if err != nil {
+    log.Fatal(err)
+}
+</code></pre>
+<p>Here HEAD points to the reference master. <code>.git/refs/heads/master</code> will tell us
+where master actually points to</p>
+<h3>Creating the right objects</h3>
+<p>An object is something that is stored on the disk and can be referred to using a
+key. Git stores files, commits, tags and many other things as objects. The three
+types of objects relevant to our discussion are:</p>
+<ul>
+<li><strong>blob</strong>: git represents file contents as blobs. This is the foundation object
+in many ways</li>
+<li><strong>tree</strong>: this represents a directory on the filesystem. Trees can contain
+other trees and blobs. The representation is similar to a UNIX filesystem</li>
+<li><strong>commit</strong>: this object stores a snapshot of the git repo and contains
+information like the tree which it points to, the author of the commit, a
+message describing why the commit was made etc.</li>
+</ul>
+<p>Objects are stored in the <code>.git/objects</code> directory. You can go to any git repo
+and see any object using the following plumbing command:</p>
+<pre><code>git cat-file -p 7108f7ecb345ee9d0084193f147cdad4d2998293
+</code></pre>
+<p>The long string at the end is the object hash which is the key mentioned
+earlier. This is the SHA-1 hash of the contents of the objects and it is stored
+on disk like so:</p>
+<pre><code>.git/objects/71/08f7ecb345ee9d0084193f147cdad4d2998293
+</code></pre>
+<p>But running the above cat-file command shows us a bunch of gibberish. This is
+because git uses <a href="https://en.wikipedia.org/wiki/Zlib">zlib</a> to compress the
+contents before writing the objects to disk. So, the order is:</p>
+
+<ul>
+<li>Use some logic to get the contents of the object (more on this later)</li>
+<li>Compress the contents using zlib</li>
+<li>Write the compressed contents to a file path constructed using the hash of the
+uncompressed contents</li>
+</ul>
+<p>Each object comprises of two parts, the header and the content. The header is
+concatenated with the content to get the final object that is stored on disk
+after compression. The header for a tree object looks like:</p>
+<pre><code class="language-go">header = &quot;tree &quot; + strconv.Itoa(len([]byte(content))) + &quot;\000&quot;
+</code></pre>
+<p>The header format looks like <code>&lt;objectType&gt; len(content)\0</code> (\0 is the null
+byte). Here <em>content</em> is the stuff that follows \0. Replace the word "tree" with
+"blob" and "commit" to get the header format for blobs and commits respectively</p>
+<pre><code class="language-go">func getObject(content, objectType string) (string, bytes.Buffer) {
+	var header string
+	var store string
+	switch objectType {
+	case &quot;blob&quot;:
+		header = &quot;blob &quot; + strconv.Itoa(len([]byte(content))) + &quot;\000&quot;
+	case &quot;tree&quot;:
+		header = &quot;tree &quot; + strconv.Itoa(len([]byte(content))) + &quot;\000&quot;
+	case &quot;commit&quot;:
+		header = &quot;commit &quot; + strconv.Itoa(len([]byte(content))) + &quot;\000&quot;
+	default:
+		fmt.Println(&quot;Unhandled object type&quot;, objectType)
+	}
+	store = header + content
+
+	// the content of the object stored on disk
+	var zlibContent bytes.Buffer
+	w := zlib.NewWriter(&amp;zlibContent)
+	w.Write([]byte(store))
+	w.Close()
+
+	// used for creating object filename
+	hash := sha1.Sum([]byte(store))
+	return hex.EncodeToString(hash[:]), zlibContent
+}
+</code></pre>
+<p>The getObject function takes in some content and returns the zlib compressed
+data and SHA-1 hash. We call this function for each of the three types of
+objects. Let's look at the content for each type of object.</p>
+<pre><code class="language-go">content := &quot;what is up, doc?\n&quot;
+blobHash, zlibContent := getObject(content, &quot;blob&quot;)
+err = writeObject(filepath.Join(objectsDir, blobHash[0:2]), blobHash[2:], zlibContent.Bytes())
+if err != nil {
+	log.Fatal(&quot;failed to write blob object&quot;, err)
+}
+</code></pre>
+<p>The blob stores the contents "what is up, doc?\n". We write the contents to disk
+using the writeObject function.</p>
+<pre><code class="language-go">func writeObject(dirName, fileName string, content []byte) error
+</code></pre>
+<p>We construct the directory name by using the first two characters of the SHA1
+hash of the object along with the base objects directory</p>
+<pre><code class="language-go">var objectsDir = filepath.Join(&quot;.git&quot;, &quot;objects&quot;)
+</code></pre>
+<p>Content of the <em>tree</em> object:</p>
+<pre><code class="language-go">// concat hash of previous blob in binary format: https://stackoverflow.com/a/33039114
+decoded, _ := hex.DecodeString(blobHash)
+content = &quot;100644 hello.txt\000&quot; + string(decoded[:])
+treeHash, zlibContent := getObject(content, &quot;tree&quot;)
+err = writeObject(filepath.Join(objectsDir, treeHash[0:2]), treeHash[2:], zlibContent.Bytes())
+if err != nil {
+    log.Fatal(&quot;failed to write tree object&quot;, err)
+}
+</code></pre>
+<p>Here we add a blob called hello.txt with permission 100644. The permissions are
+similar to UNIX ones, except they are very restrictive (100644 for blobs, 040000
+for trees etc.)</p>
+<p>The content format for trees is a little different from those of blobs and
+commits:</p>
+<pre><code>tree [content size]\0[Entries having references to other trees and blobs]
+[mode] [file/folder name]\0[SHA-1 of referencing blob or tree]
+</code></pre>
+<p>Note that the SHA-1 of referencing blobs/trees should be in binary format. Refer
+<a href="https://stackoverflow.com/a/33039114">here</a> for more details</p>
+<p>If we have more than one entry for referencing blob/tree, it should be sorted
+lexicographically based on path</p>
+<p>More information can be found on this
+<a href="https://stackoverflow.com/questions/14790681/what-is-the-internal-format-of-a-git-tree-object">stackoverflow</a>
+post</p>
+<p>The commit contents are similar to blobs:</p>
+<pre><code class="language-go">content = &quot;tree &quot; + treeHash + &quot;\nauthor Siddharth Singh &lt;me@s1dsq.com&gt; 1708260537 +0530\ncommitter Siddharth Singh &lt;me@s1dsq.com&gt; 1708260537 +0530\n\nAdd hello.txt\n&quot;
+commitHash, zlibContent := getObject(content, &quot;commit&quot;)
+err = writeObject(filepath.Join(objectsDir, commitHash[0:2]), commitHash[2:], zlibContent.Bytes())
+if err != nil {
+    log.Fatal(&quot;failed to write commit object&quot;, err)
+}
+</code></pre>
+<p>Commit hashes are non-deterministic as they contain timestamp which can change.
+I have used fixed timestamp to make the hash deterministic and reproducible</p>
+<h3>Point master to the commit</h3>
+<p>A commit is freestanding entity in the object universe. We point hashes to human
+readable references to help us keep track of a chain of commits. Here is the
+code to do it:</p>
+<pre><code class="language-go">// point &quot;master&quot; ref to the commit hash we just created
+createDir(&quot;.git/refs/heads&quot;)
+err = os.WriteFile(filepath.Join(&quot;.git&quot;, &quot;refs&quot;, &quot;heads&quot;, &quot;master&quot;), []byte(commitHash), 0644)
+if err != nil {
+    log.Fatal(&quot;failed to write refs/heads&quot;, err)
+}
+</code></pre>
+<p>Running <code>git log</code> shows us the commit we just created</p>
+<h2>Conclusion</h2>
+<p>Add a git remote of your choice like and push to it:</p>
+<pre><code>git remote add origin git@github.com:s1dsq/basic-git-repo.git
+git push -u origin master
+</code></pre>
+<p>Check the repo on github to see that we have a file called hello.txt on the
+master branch with one commit on it</p>
+<p>The go script used in the post is available <a href="https://github.com/s1dsq/primitive-git">here</a></p>
+<footer role="contentinfo">
+    <span><a href="#">↑ Back to Top</a></span><br><br>
+</footer>
