@@ -73,8 +73,8 @@ EOF
 write_page() {
 	filename=$1
 	directory=$(echo $(basename "$filename" .md))
-	$(mkdir -p build/$directory)
-	target=$(echo "$filename" | sed -r 's|\w+/(.*).md|build/\1/index.html|')
+	$(mkdir -p docs/$directory)
+	target=$(echo "$filename" | sed -r 's|\w+/(.*).md|docs/\1/index.html|')
 	created=$(echo $(head -3 "$filename" | tail -1))
 	title=$2
 
@@ -84,18 +84,18 @@ write_page() {
 		> "$target" && cat footer.html >> "$target"
 }
 
-rm -fr build && mkdir build
+rm -fr docs && mkdir docs
 
 # Blog posts
-index_tsv posts | sort -rt "	" -k 3 > build/posts.tsv
-index_html build/posts.tsv > build/index.html
-atom_xml build/posts.tsv > build/atom.xml
+index_tsv posts | sort -rt "	" -k 3 > docs/posts.tsv
+index_html docs/posts.tsv > docs/index.html
+atom_xml docs/posts.tsv > docs/atom.xml
 while read -r f title created; do
 	write_page "$f" "$title" "$created"
-done < build/posts.tsv
+done < docs/posts.tsv
 
 # Pages
-index_tsv pages > build/pages.tsv
+index_tsv pages > docs/pages.tsv
 while read -r f title created; do
 	write_page "$f" "$title" "$created"
-done < build/pages.tsv
+done < docs/pages.tsv

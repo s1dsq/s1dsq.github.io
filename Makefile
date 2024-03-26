@@ -1,9 +1,9 @@
 build:
 	sh ./barf
-	rsync -r public/ build/public
+	rsync -r public/ docs/public
 
 clean:
-	rm -rf build/*
+	rm -rf docs/*
 
 watch:
 	while true; do \
