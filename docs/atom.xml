@@ -2,11 +2,178 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 	<title>Siddharth's blog</title>
 	<link href="https://s1dsq.github.io/atom.xml" rel="self" />
-	<updated>2024-03-26T21:52:58Z</updated>
+	<updated>2024-04-05T20:45:56Z</updated>
 	<author>
 		<name>Siddharth Singh</name>
 	</author>
 	<id>https://s1dsq.github.io,2024-03-26:default-atom-feed/</id>
+	<entry>
+		<title>Pydantic: a simple case study</title>
+		<content type="html">&lt;h1&gt;Pydantic: a simple case study&lt;/h1&gt;
+&lt;p&gt;2024-04-05&lt;/p&gt;
+&lt;p&gt;&lt;a href=&quot;https://docs.pydantic.dev/latest/&quot;&gt;Pydantic&lt;/a&gt; is a data validation library for
+python. In this post I want to contrast it with using plain python by writing a
+short program&lt;/p&gt;
+&lt;p&gt;We will parse the output of the &lt;a href=&quot;https://lobste.rs/hottest.json&quot;&gt;hottest&lt;/a&gt; posts
+from &lt;a href=&quot;https://lobste.rs/&quot;&gt;lobste.rs&lt;/a&gt; which is a link aggregator like hackernews
+focused on computing&lt;/p&gt;
+&lt;p&gt;The code for this post is available
+&lt;a href=&quot;https://github.com/s1dsq/pydantic-case-study&quot;&gt;here&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;Regular python&lt;/h2&gt;
+&lt;p&gt;The hottest posts is a json array and each entry is of the following format:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-json&quot;&gt;{
+    &amp;quot;short_id&amp;quot;: &amp;quot;pkgjno&amp;quot;,
+    &amp;quot;short_id_url&amp;quot;: &amp;quot;https://lobste.rs/s/pkgjno&amp;quot;,
+    &amp;quot;created_at&amp;quot;: &amp;quot;2024-03-30T16:16:16.000-05:00&amp;quot;,
+    &amp;quot;title&amp;quot;: &amp;quot;Type Inference Was a Mistake&amp;quot;,
+    &amp;quot;url&amp;quot;: &amp;quot;https://borretti.me/article/type-inference-was-a-mistake&amp;quot;,
+    &amp;quot;score&amp;quot;: 36,
+    &amp;quot;flags&amp;quot;: 0,
+    &amp;quot;comment_count&amp;quot;: 32,
+    &amp;quot;description&amp;quot;: &amp;quot;&amp;quot;,
+    &amp;quot;description_plain&amp;quot;: &amp;quot;&amp;quot;,
+    &amp;quot;comments_url&amp;quot;: &amp;quot;https://lobste.rs/s/pkgjno/type_inference_was_mistake&amp;quot;,
+    &amp;quot;submitter_user&amp;quot;: &amp;quot;puffnfresh&amp;quot;,
+    &amp;quot;user_is_author&amp;quot;: false,
+    &amp;quot;tags&amp;quot;: [&amp;quot;plt&amp;quot;]
+},
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;We want to read each entry and parse the fields of interest which is represented
+as:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-python&quot;&gt;@dataclass
+class LobstersPost:
+    created_at: datetime
+    title: str
+    url: str
+    score: int
+    comments_url: str
+    tags: list[str]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Here is core parsing function:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-python&quot;&gt;def parse_post(post: dict) -&amp;gt; typing.Union[LobstersPost, None]:
+    created_at: datetime = datetime.now()
+    title: str = &amp;quot;&amp;quot;
+    url: str = &amp;quot;&amp;quot;
+    score: int = 0
+    comments_url: str = &amp;quot;&amp;quot;
+    tags: list[str] = []
+
+    try:
+        errors = []
+        for k, v in post.items():
+            if k == &amp;quot;created_at&amp;quot;:
+                try:
+                    created_at = datetime.strptime(v, &amp;quot;%Y-%m-%dT%H:%M:%S.%f%z&amp;quot;)
+                except ValueError as e:
+                    errors.append(&amp;quot;failed to parse datetime&amp;quot; + str(e))
+            elif k == &amp;quot;title&amp;quot;:
+                if isinstance(v, str):
+                    title = v
+                else:
+                    errors.append(f&amp;quot;cannot convert {type(v)} to str&amp;quot;)
+            elif k == &amp;quot;url&amp;quot;:
+                if isinstance(v, str):
+                    url = v
+                else:
+                    errors.append(f&amp;quot;cannot convert {type(v)} to str&amp;quot;)
+            elif k == &amp;quot;score&amp;quot;:
+                if isinstance(v, int):
+                    score = v
+                else:
+                    errors.append(f&amp;quot;cannot convert {type(v)} to int&amp;quot;)
+            elif k == &amp;quot;comments_url&amp;quot;:
+                if isinstance(v, str):
+                    comments_url = v
+                else:
+                    errors.append(f&amp;quot;cannot convert {type(v)} to str&amp;quot;)
+            elif k == &amp;quot;tags&amp;quot;:
+                if isinstance(v, list):
+                    tags = []
+                    for tag in v:
+                        if isinstance(tag, str):
+                            tags.append(tag)
+                        else:
+                            errors.append(f&amp;quot;cannot convert {type(tag)} to int&amp;quot;)
+                else:
+                    errors.append(f&amp;quot;cannot convert {type(v)} to list[str]&amp;quot;)
+
+        if len(errors) != 0:
+            raise ValidationError(errors)
+        return LobstersPost(
+            created_at=created_at,
+            title=title,
+            url=url,
+            score=score,
+            comments_url=comments_url,
+            tags=tags,
+        )
+    except ValidationError as e:
+        print(e.errors())
+        return None
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Here &lt;code&gt;ValidationError&lt;/code&gt; is a custom Exception I have defined. We are validating
+each field if present and checking if the values are of the proper types, making
+heavy use of the builtin function &lt;code&gt;isinstance&lt;/code&gt;. Some observations:&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;The parsing function is rather verbose. Imagine having many schemas all over
+the codebase and writing these kinds of functions for all of them. This
+quickly gets out of hand&lt;/li&gt;
+&lt;li&gt;If the schema changes, we have to change the parsing function as well&lt;/li&gt;
+&lt;li&gt;Nested types are a chore to validate&lt;/li&gt;
+&lt;li&gt;The datetime validation does not handle different formats. That adds further
+complexities&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Pydantic&lt;/h2&gt;
+&lt;p&gt;Let&#39;s write the same &lt;code&gt;parse_post&lt;/code&gt; function using pydantic. We define the schema
+first:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-python&quot;&gt;class LobstersPost(BaseModel):
+    created_at: datetime
+    title: str
+    url: str
+    score: int
+    comments_url: str
+    tags: list[str]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;BaseModel&lt;/code&gt; is a part of pydantic. It is like a dataclass except it boasts more
+features as advertised in the docs. Let&#39;s check the parsing function which is
+laughably small:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-python&quot;&gt;def parse_post(post: dict) -&amp;gt; typing.Union[LobstersPost, None]:
+    try:
+        p = LobstersPost(**post)
+        return p
+    except ValidationError as e:
+        print(e.errors())
+        return None
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;All our concerns with using just python are taken care of now. But here are some
+cases where you may not need the powers of pydantic:&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;When the data does not leave the system boundary. Simple dataclasses will do
+here as the programmer guarantees the types&lt;/li&gt;
+&lt;li&gt;Pydantic has many features baked in and a steeper learning curve. For simpler
+use cases you may not need them&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;I read &lt;a href=&quot;https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/&quot;&gt;Parse, don&#39;t
+validate&lt;/a&gt; a
+while back and was immediately sold on the idea but had no idea how to apply it
+in languages like python.&lt;/p&gt;
+&lt;p&gt;The core idea of the article is that we must transform unstructured data into
+structured data only once and encode that information in the type system so that
+it never needs to be checked again. In practice this means:&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Choose data structures that make illegal state unrepresentable&lt;/li&gt;
+&lt;li&gt;Push the burden of &lt;em&gt;validation&lt;/em&gt; at the system boundary&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Pydantic aids in our quest to validate early&lt;/p&gt;</content>
+		<link href="https://s1dsq.github.io/pydantic"/>
+		<id>https://s1dsq.github.io/pydantic</id>
+		<updated>2024-04-05T10:00:00Z</updated>
+		<published>2024-04-05T10:00:00Z</published>
+	</entry>
 	<entry>
 		<title>Writing a primitive version of git</title>
 		<content type="html">&lt;h1&gt;Writing a primitive version of git&lt;/h1&gt;

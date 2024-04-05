@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="color-scheme" content="dark light">
+	<link rel="icon" href="data:,">
+	<title>Siddharth's blog</title>
+	<link href="https://s1dsq.github.io/atom.xml" type="application/atom+xml" rel="alternate" title="Atom feed for blog posts" />
+	<style>
+		* {
+			box-sizing: border-box;
+		}
+		body {
+			font-family: sans-serif;
+      font-size: 1.3rem;
+			line-height: 1.45;
+			margin: 0 auto;
+			max-width: 52rem;
+			padding: 0 15px;
+		}
+		hr {
+			background-color: grey;
+			border: 0;
+			height: 1px;
+			margin: 2rem 0;
+		}
+		nav {
+			margin: 2rem 0 0;
+		}
+		main {
+			hyphens: auto;
+		}
+		main p {
+			margin: 1rem;
+		}
+		h1,h2,h3,h4 {
+			margin: 2rem 0 0;
+		}
+		h1 {
+			margin-bottom: 0.5rem;
+		}
+		h1 + p {
+			margin: 0 0 1rem;
+		}
+		span.created {
+			display: block;
+			margin: 30px 15px;
+		}
+		img {
+			border: 1px solid lightgrey;
+			height: auto;
+			max-width: 100%;
+			width: auto;
+		}
+		blockquote {
+			border: 1px solid;
+			border-left: 6px solid;
+			margin: 2rem 0;
+			padding: 10px;
+		}
+		blockquote p {
+			margin: 0;
+		}
+		figure {
+			margin: 2rem 0;
+		}
+		figcaption {
+			color: slategrey;
+		}
+		code {
+			border: 1px solid;
+			padding: 0.1rem 0.3rem;
+			tab-size: 4;
+		}
+		pre {
+			border: 1px solid;
+		}
+		pre code {
+			border: 0;
+			display: block;
+			overflow-x: auto;
+			padding: 0.3rem 0.6rem;
+		}
+		table {
+			border-collapse: collapse;
+			margin: 2rem 0;
+			text-align: left;
+			width: 100%;
+		}
+		tr {
+			border-bottom: 1px solid lightgrey;
+		}
+		tr:nth-of-type(odd) td {
+			background-color: #f8f8f8;
+		}
+		th,td {
+			padding: 6px;
+		}
+		footer {
+			border-top: 1px dashed grey;
+			margin: 2rem 0;
+			padding: 1rem 15px;
+		}
+		@supports (color-scheme: dark light) {
+			@media screen and (prefers-color-scheme: dark) {
+				a:link {color: #9e9eff;}
+				a:visited {color: #d0adf0;}
+				a:active {color: red;}
+			}
+		}
+	</style>
+</head>
+
+<nav>
+	<a href="/">Home</a><span> | </span><a href="/about">About</a><span> | </span><a href="/contact">Contact</a>
+</nav>
+
+<main>
+<h1>Pydantic: a simple case study</h1>
+<p>2024-04-05</p>
+<p><a href="https://docs.pydantic.dev/latest/">Pydantic</a> is a data validation library for
+python. In this post I want to contrast it with using plain python by writing a
+short program</p>
+<p>We will parse the output of the <a href="https://lobste.rs/hottest.json">hottest</a> posts
+from <a href="https://lobste.rs/">lobste.rs</a> which is a link aggregator like hackernews
+focused on computing</p>
+<p>The code for this post is available
+<a href="https://github.com/s1dsq/pydantic-case-study">here</a></p>
+<h2>Regular python</h2>
+<p>The hottest posts is a json array and each entry is of the following format:</p>
+<pre><code class="language-json">{
+    &quot;short_id&quot;: &quot;pkgjno&quot;,
+    &quot;short_id_url&quot;: &quot;https://lobste.rs/s/pkgjno&quot;,
+    &quot;created_at&quot;: &quot;2024-03-30T16:16:16.000-05:00&quot;,
+    &quot;title&quot;: &quot;Type Inference Was a Mistake&quot;,
+    &quot;url&quot;: &quot;https://borretti.me/article/type-inference-was-a-mistake&quot;,
+    &quot;score&quot;: 36,
+    &quot;flags&quot;: 0,
+    &quot;comment_count&quot;: 32,
+    &quot;description&quot;: &quot;&quot;,
+    &quot;description_plain&quot;: &quot;&quot;,
+    &quot;comments_url&quot;: &quot;https://lobste.rs/s/pkgjno/type_inference_was_mistake&quot;,
+    &quot;submitter_user&quot;: &quot;puffnfresh&quot;,
+    &quot;user_is_author&quot;: false,
+    &quot;tags&quot;: [&quot;plt&quot;]
+},
+</code></pre>
+<p>We want to read each entry and parse the fields of interest which is represented
+as:</p>
+<pre><code class="language-python">@dataclass
+class LobstersPost:
+    created_at: datetime
+    title: str
+    url: str
+    score: int
+    comments_url: str
+    tags: list[str]
+</code></pre>
+<p>Here is core parsing function:</p>
+<pre><code class="language-python">def parse_post(post: dict) -&gt; typing.Union[LobstersPost, None]:
+    created_at: datetime = datetime.now()
+    title: str = &quot;&quot;
+    url: str = &quot;&quot;
+    score: int = 0
+    comments_url: str = &quot;&quot;
+    tags: list[str] = []
+
+    try:
+        errors = []
+        for k, v in post.items():
+            if k == &quot;created_at&quot;:
+                try:
+                    created_at = datetime.strptime(v, &quot;%Y-%m-%dT%H:%M:%S.%f%z&quot;)
+                except ValueError as e:
+                    errors.append(&quot;failed to parse datetime&quot; + str(e))
+            elif k == &quot;title&quot;:
+                if isinstance(v, str):
+                    title = v
+                else:
+                    errors.append(f&quot;cannot convert {type(v)} to str&quot;)
+            elif k == &quot;url&quot;:
+                if isinstance(v, str):
+                    url = v
+                else:
+                    errors.append(f&quot;cannot convert {type(v)} to str&quot;)
+            elif k == &quot;score&quot;:
+                if isinstance(v, int):
+                    score = v
+                else:
+                    errors.append(f&quot;cannot convert {type(v)} to int&quot;)
+            elif k == &quot;comments_url&quot;:
+                if isinstance(v, str):
+                    comments_url = v
+                else:
+                    errors.append(f&quot;cannot convert {type(v)} to str&quot;)
+            elif k == &quot;tags&quot;:
+                if isinstance(v, list):
+                    tags = []
+                    for tag in v:
+                        if isinstance(tag, str):
+                            tags.append(tag)
+                        else:
+                            errors.append(f&quot;cannot convert {type(tag)} to int&quot;)
+                else:
+                    errors.append(f&quot;cannot convert {type(v)} to list[str]&quot;)
+
+        if len(errors) != 0:
+            raise ValidationError(errors)
+        return LobstersPost(
+            created_at=created_at,
+            title=title,
+            url=url,
+            score=score,
+            comments_url=comments_url,
+            tags=tags,
+        )
+    except ValidationError as e:
+        print(e.errors())
+        return None
+</code></pre>
+<p>Here <code>ValidationError</code> is a custom Exception I have defined. We are validating
+each field if present and checking if the values are of the proper types, making
+heavy use of the builtin function <code>isinstance</code>. Some observations:</p>
+
+<ul>
+<li>The parsing function is rather verbose. Imagine having many schemas all over
+the codebase and writing these kinds of functions for all of them. This
+quickly gets out of hand</li>
+<li>If the schema changes, we have to change the parsing function as well</li>
+<li>Nested types are a chore to validate</li>
+<li>The datetime validation does not handle different formats. That adds further
+complexities</li>
+</ul>
+<h2>Pydantic</h2>
+<p>Let's write the same <code>parse_post</code> function using pydantic. We define the schema
+first:</p>
+<pre><code class="language-python">class LobstersPost(BaseModel):
+    created_at: datetime
+    title: str
+    url: str
+    score: int
+    comments_url: str
+    tags: list[str]
+</code></pre>
+<p><code>BaseModel</code> is a part of pydantic. It is like a dataclass except it boasts more
+features as advertised in the docs. Let's check the parsing function which is
+laughably small:</p>
+<pre><code class="language-python">def parse_post(post: dict) -&gt; typing.Union[LobstersPost, None]:
+    try:
+        p = LobstersPost(**post)
+        return p
+    except ValidationError as e:
+        print(e.errors())
+        return None
+</code></pre>
+<p>All our concerns with using just python are taken care of now. But here are some
+cases where you may not need the powers of pydantic:</p>
+
+<ul>
+<li>When the data does not leave the system boundary. Simple dataclasses will do
+here as the programmer guarantees the types</li>
+<li>Pydantic has many features baked in and a steeper learning curve. For simpler
+use cases you may not need them</li>
+</ul>
+<h2>Conclusion</h2>
+<p>I read <a href="https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/">Parse, don't
+validate</a> a
+while back and was immediately sold on the idea but had no idea how to apply it
+in languages like python.</p>
+<p>The core idea of the article is that we must transform unstructured data into
+structured data only once and encode that information in the type system so that
+it never needs to be checked again. In practice this means:</p>
+
+<ul>
+<li>Choose data structures that make illegal state unrepresentable</li>
+<li>Push the burden of <em>validation</em> at the system boundary</li>
+</ul>
+<p>Pydantic aids in our quest to validate early</p>
+<footer role="contentinfo">
+    <span><a href="#">↑ Back to Top</a></span><br><br>
+</footer>
