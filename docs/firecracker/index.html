@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="color-scheme" content="dark light">
+	<link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/public/style.css">
+  <link rel="stylesheet" href="/public/a11y-light.css">
+  <script src="/public/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+	<title>Siddharth's blog</title>
+	<link href="https://s1dsq.github.io/atom.xml" type="application/atom+xml" rel="alternate" title="Atom feed for blog posts" />
+</head>
+
+<nav>
+	<a href="/">Home</a><span> | </span><a href="/about">About</a><span> | </span><a href="/contact">Contact</a>
+</nav>
+
+<main>
+<h1>Firecracker: Lightweight Virtualization for Serverless Applications</h1>
+<p>2025-04-23</p>
+<p><a href="https://www.usenix.org/system/files/nsdi20-paper-agache.pdf">Firecracker</a> is
+AWS' <a href="https://firecracker-microvm.github.io/">open source</a> virtual machine
+monitor used in it's serverless functions and container offerings (Lambda and
+Fargate)</p>
+<p>Firecracker is a good case study because of it's small(er) scope than many other
+VMMs out there. It
+<a href="https://github.com/firecracker-microvm/firecracker/blob/main/SPECIFICATION.md">promises</a>
+fast VM startup, minimal overhead and strong security among other things.</p>
+<h2>The need for a new VMM</h2>
+<p>Serverless compute allows you to run workloads on rented computers without
+worrying about managing them. This is a good business to be in as cloud
+providers. Multi-tenancy (running multiple workloads on the same computer) is a
+lucrative business model but poses challenges:</p>
+<ul>
+<li>Security - one workload should not be able to access data from another</li>
+<li>Performance - should not decrease due to resource sharing (noisy neighbour
+effect)</li>
+</ul>
+<p>Operating system virtualization has been explored before. The linux kernel has
+builtin mechanisms for this:</p>
+<ul>
+<li><code>cgroups</code> - grouping process and managing resource usage</li>
+<li><code>namespaces</code> - separate kernel resources like PIDs</li>
+<li><code>seccomp-bpf</code> - controlling access to syscalls</li>
+<li><code>chroot</code> - providing an isolated filesystem</li>
+</ul>
+<p>This provides strong isolation but we are trading off security (due to workloads
+sharing the same kernel) and code compatibility (customers should be able to run
+arbitrary linux binaries)</p>
+<p>Hypervisor based virtualiztion solves for the two issues but carries with it an
+performance overhead.</p>
+<p>Firecracker was built to have the best of both hypervisor virtualization and OS
+level containers - you get performance and isolation together</p>
+<h2>VMM</h2>
+<p>Firecracker VMM uses the KVM infrastructure built into linux kernel to provide
+minimal virtual machines. It relies on components built into linux rather than
+re-implementing their own. Eg: block I/O is passed through to the kernel,
+TUN/TAP is used as virtual network interfaces.</p>
+<h3>Device model</h3>
+<p>A minimal set of devices are emulated:</p>
+<ul>
+<li>serial ports</li>
+<li>partial PS/2 keyboard controller via i8042</li>
+<li>network and block devices: virtio (an open API standard) is used for exposing
+emulated devices. Storage only supports block devices and not filesystem as
+the implementation can be complex and also increases the security risks</li>
+</ul>
+<h3>API</h3>
+<p>Firecracker exposes REST API as a means to specify guest kernel, boot arguments,
+network configs, storage configs, guest machine configs and cpuid, logging,
+metrics, rate limiters etc.</p>
+<h3>Rate limiting and performance</h3>
+<p>The APIs can be used to describe the cores and memory required by the VMs as
+well as set things like cpuids. Firecracker does not emulate missing CPU
+functionality and cpuids are more used for hiding things from the VMs making the
+fleet of heterogenous computers appear homogenous</p>
+<p>Builtin rate limiting is applied to storage (IOPS) and networking (PPS). They
+can also be configured via the REST APIs to change things on demand when needed.
+The storage / networking components are rate limited to allow for control plane
+operations and ensuring that a small numbers of VMs don't hijack these resources</p>
+<h3>Jailer</h3>
+<p>An important additional security measure is wrapping the firecracker VMM around
+a jailer process that sandboxes the VMM and:</p>
+<ul>
+<li>runs it in a <em>chroot</em> environment</li>
+<li>isolating it in <em>pid</em> and networking namespaces</li>
+<li>dropping privileges</li>
+<li>setting a restrictive <em>seccomp_bpf</em> profile - whitelisting some syscalls</li>
+</ul>
+<h2>In AWS Lambda</h2>
+<p>Lambda provides <em>serverless functions</em> which runs functions in response to
+events in your code. Lambda functions run within a sandbox, which provides
+minimal Linux userland and some libraries and utilities.</p>
+<p><img src="../public/images/lambda_worker.png" alt="worker" /></p>
+<p>The execution of customer code happens inside the lambda worker fleet
+(architecture shown above). Workers provide a <em>slot</em> which provides pre-loaded
+environments for executing functions.</p>
+<p>Each worker can run hundreds or thousands of MicroVMs (each having one slot).
+Along with a minimal linux userland and kernel each MicroVM contains a shim
+process which communicates with the outside control plane. One firecracker
+process is launched per MicroVM, responsible for creating and managing the
+MicroVM and providing device emulation and handling VM exits.</p>
+<p>The shim process communicates with the "Micro Manager" via TCP/IP. The
+micro-manager is responsible for managing the firecracker process inside the
+worker. The manager communicates with the rest of the lambda stack to provide
+status updates, sending payload / error messages etc. Communication between the
+micro-manager and firecracker add some overhead but keeps the system loosely
+coupled. This communication protocol is an important boundary because it
+separates the multi-tenant control plane from the single tenant / single
+function MicroVM</p>
+<p>The MicroVM also has processes for logging, monitoring and the like that send
+updates to humans and automated systems</p>
+<p>The micro-manager also does optimizations such as pre-booting VMs to keep the
+lambda hot-path fast</p>
+<h2>Evaluation</h2>
+<p>Firecracker set out with a couple of goals which it achieves:</p>
+<ul>
+<li><strong>Isolation</strong>: multiple workloads can run on the same hardware through
+virtualization</li>
+<li><strong>Overhead and density</strong>: overhead is as low as 3% for memory and minimal for CPU</li>
+<li><strong>Performance</strong>: block IO and network performance can be improved but are
+sufficient for Lambda and Fargate</li>
+<li><strong>Compatibility</strong>: firecracker can run unmodified linux kernel and userland</li>
+<li><strong>Fast switching</strong>: boot times are as low as 150ms, so switching is fast</li>
+<li><strong>Soft allocation</strong>: memory and cpu are oversubscribed by multiple orders of
+magnitude</li>
+</ul>
+<p>For some of the comparisons between Firecracker and other VMMs on metrics like
+boot times, overhead and IO performance check out the firecracker paper</p>
+<footer role="contentinfo">
+    <span><a href="#">↑ Back to Top</a></span><br><br>
+</footer>

@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 	<title>Siddharth's blog</title>
 	<link href="https://s1dsq.github.io/atom.xml" rel="self" />
-	<updated>2024-04-05T20:45:56Z</updated>
+	<updated>2025-04-28T08:12:32Z</updated>
 	<author>
 		<name>Siddharth Singh</name>
 	</author>
@@ -240,12 +240,12 @@ message describing why the commit was made etc.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;Objects are stored in the &lt;code&gt;.git/objects&lt;/code&gt; directory. You can go to any git repo
 and see any object using the following plumbing command:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;git cat-file -p 7108f7ecb345ee9d0084193f147cdad4d2998293
+&lt;pre&gt;&lt;code class=&quot;language-sh&quot;&gt;git cat-file -p 7108f7ecb345ee9d0084193f147cdad4d2998293
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;The long string at the end is the object hash which is the key mentioned
 earlier. This is the SHA-1 hash of the contents of the objects and it is stored
 on disk like so:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;.git/objects/71/08f7ecb345ee9d0084193f147cdad4d2998293
+&lt;pre&gt;&lt;code class=&quot;language-sh&quot;&gt;.git/objects/71/08f7ecb345ee9d0084193f147cdad4d2998293
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;But running the above cat-file command shows us a bunch of gibberish. This is
 because git uses &lt;a href=&quot;https://en.wikipedia.org/wiki/Zlib&quot;&gt;zlib&lt;/a&gt; to compress the
@@ -358,7 +358,7 @@ if err != nil {
 &lt;p&gt;Running &lt;code&gt;git log&lt;/code&gt; shows us the commit we just created&lt;/p&gt;
 &lt;h2&gt;Conclusion&lt;/h2&gt;
 &lt;p&gt;Add a git remote of your choice like and push to it:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;git remote add origin git@github.com:s1dsq/basic-git-repo.git
+&lt;pre&gt;&lt;code class=&quot;language-sh&quot;&gt;git remote add origin git@github.com:s1dsq/basic-git-repo.git
 git push -u origin master
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Check the repo on github to see that we have a file called hello.txt on the
@@ -368,5 +368,123 @@ master branch with one commit on it&lt;/p&gt;
 		<id>https://s1dsq.github.io/git-internals</id>
 		<updated>2024-03-24T10:00:00Z</updated>
 		<published>2024-03-24T10:00:00Z</published>
+	</entry>
+	<entry>
+		<title>Firecracker: Lightweight Virtualization for Serverless Applications</title>
+		<content type="html">&lt;h1&gt;Firecracker: Lightweight Virtualization for Serverless Applications&lt;/h1&gt;
+&lt;p&gt;2025-04-23&lt;/p&gt;
+&lt;p&gt;&lt;a href=&quot;https://www.usenix.org/system/files/nsdi20-paper-agache.pdf&quot;&gt;Firecracker&lt;/a&gt; is
+AWS&#39; &lt;a href=&quot;https://firecracker-microvm.github.io/&quot;&gt;open source&lt;/a&gt; virtual machine
+monitor used in it&#39;s serverless functions and container offerings (Lambda and
+Fargate)&lt;/p&gt;
+&lt;p&gt;Firecracker is a good case study because of it&#39;s small(er) scope than many other
+VMMs out there. It
+&lt;a href=&quot;https://github.com/firecracker-microvm/firecracker/blob/main/SPECIFICATION.md&quot;&gt;promises&lt;/a&gt;
+fast VM startup, minimal overhead and strong security among other things.&lt;/p&gt;
+&lt;h2&gt;The need for a new VMM&lt;/h2&gt;
+&lt;p&gt;Serverless compute allows you to run workloads on rented computers without
+worrying about managing them. This is a good business to be in as cloud
+providers. Multi-tenancy (running multiple workloads on the same computer) is a
+lucrative business model but poses challenges:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Security - one workload should not be able to access data from another&lt;/li&gt;
+&lt;li&gt;Performance - should not decrease due to resource sharing (noisy neighbour
+effect)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Operating system virtualization has been explored before. The linux kernel has
+builtin mechanisms for this:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;cgroups&lt;/code&gt; - grouping process and managing resource usage&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;namespaces&lt;/code&gt; - separate kernel resources like PIDs&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;seccomp-bpf&lt;/code&gt; - controlling access to syscalls&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;chroot&lt;/code&gt; - providing an isolated filesystem&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This provides strong isolation but we are trading off security (due to workloads
+sharing the same kernel) and code compatibility (customers should be able to run
+arbitrary linux binaries)&lt;/p&gt;
+&lt;p&gt;Hypervisor based virtualiztion solves for the two issues but carries with it an
+performance overhead.&lt;/p&gt;
+&lt;p&gt;Firecracker was built to have the best of both hypervisor virtualization and OS
+level containers - you get performance and isolation together&lt;/p&gt;
+&lt;h2&gt;VMM&lt;/h2&gt;
+&lt;p&gt;Firecracker VMM uses the KVM infrastructure built into linux kernel to provide
+minimal virtual machines. It relies on components built into linux rather than
+re-implementing their own. Eg: block I/O is passed through to the kernel,
+TUN/TAP is used as virtual network interfaces.&lt;/p&gt;
+&lt;h3&gt;Device model&lt;/h3&gt;
+&lt;p&gt;A minimal set of devices are emulated:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;serial ports&lt;/li&gt;
+&lt;li&gt;partial PS/2 keyboard controller via i8042&lt;/li&gt;
+&lt;li&gt;network and block devices: virtio (an open API standard) is used for exposing
+emulated devices. Storage only supports block devices and not filesystem as
+the implementation can be complex and also increases the security risks&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;API&lt;/h3&gt;
+&lt;p&gt;Firecracker exposes REST API as a means to specify guest kernel, boot arguments,
+network configs, storage configs, guest machine configs and cpuid, logging,
+metrics, rate limiters etc.&lt;/p&gt;
+&lt;h3&gt;Rate limiting and performance&lt;/h3&gt;
+&lt;p&gt;The APIs can be used to describe the cores and memory required by the VMs as
+well as set things like cpuids. Firecracker does not emulate missing CPU
+functionality and cpuids are more used for hiding things from the VMs making the
+fleet of heterogenous computers appear homogenous&lt;/p&gt;
+&lt;p&gt;Builtin rate limiting is applied to storage (IOPS) and networking (PPS). They
+can also be configured via the REST APIs to change things on demand when needed.
+The storage / networking components are rate limited to allow for control plane
+operations and ensuring that a small numbers of VMs don&#39;t hijack these resources&lt;/p&gt;
+&lt;h3&gt;Jailer&lt;/h3&gt;
+&lt;p&gt;An important additional security measure is wrapping the firecracker VMM around
+a jailer process that sandboxes the VMM and:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;runs it in a &lt;em&gt;chroot&lt;/em&gt; environment&lt;/li&gt;
+&lt;li&gt;isolating it in &lt;em&gt;pid&lt;/em&gt; and networking namespaces&lt;/li&gt;
+&lt;li&gt;dropping privileges&lt;/li&gt;
+&lt;li&gt;setting a restrictive &lt;em&gt;seccomp_bpf&lt;/em&gt; profile - whitelisting some syscalls&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;In AWS Lambda&lt;/h2&gt;
+&lt;p&gt;Lambda provides &lt;em&gt;serverless functions&lt;/em&gt; which runs functions in response to
+events in your code. Lambda functions run within a sandbox, which provides
+minimal Linux userland and some libraries and utilities.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;../public/images/lambda_worker.png&quot; alt=&quot;worker&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;The execution of customer code happens inside the lambda worker fleet
+(architecture shown above). Workers provide a &lt;em&gt;slot&lt;/em&gt; which provides pre-loaded
+environments for executing functions.&lt;/p&gt;
+&lt;p&gt;Each worker can run hundreds or thousands of MicroVMs (each having one slot).
+Along with a minimal linux userland and kernel each MicroVM contains a shim
+process which communicates with the outside control plane. One firecracker
+process is launched per MicroVM, responsible for creating and managing the
+MicroVM and providing device emulation and handling VM exits.&lt;/p&gt;
+&lt;p&gt;The shim process communicates with the &quot;Micro Manager&quot; via TCP/IP. The
+micro-manager is responsible for managing the firecracker process inside the
+worker. The manager communicates with the rest of the lambda stack to provide
+status updates, sending payload / error messages etc. Communication between the
+micro-manager and firecracker add some overhead but keeps the system loosely
+coupled. This communication protocol is an important boundary because it
+separates the multi-tenant control plane from the single tenant / single
+function MicroVM&lt;/p&gt;
+&lt;p&gt;The MicroVM also has processes for logging, monitoring and the like that send
+updates to humans and automated systems&lt;/p&gt;
+&lt;p&gt;The micro-manager also does optimizations such as pre-booting VMs to keep the
+lambda hot-path fast&lt;/p&gt;
+&lt;h2&gt;Evaluation&lt;/h2&gt;
+&lt;p&gt;Firecracker set out with a couple of goals which it achieves:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Isolation&lt;/strong&gt;: multiple workloads can run on the same hardware through
+virtualization&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Overhead and density&lt;/strong&gt;: overhead is as low as 3% for memory and minimal for CPU&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Performance&lt;/strong&gt;: block IO and network performance can be improved but are
+sufficient for Lambda and Fargate&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Compatibility&lt;/strong&gt;: firecracker can run unmodified linux kernel and userland&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Fast switching&lt;/strong&gt;: boot times are as low as 150ms, so switching is fast&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Soft allocation&lt;/strong&gt;: memory and cpu are oversubscribed by multiple orders of
+magnitude&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;For some of the comparisons between Firecracker and other VMMs on metrics like
+boot times, overhead and IO performance check out the firecracker paper&lt;/p&gt;</content>
+		<link href="https://s1dsq.github.io/firecracker"/>
+		<id>https://s1dsq.github.io/firecracker</id>
+		<updated>2025-04-23T10:00:00Z</updated>
+		<published>2025-04-23T10:00:00Z</published>
 	</entry>
 </feed>
