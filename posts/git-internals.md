@@ -77,14 +77,14 @@ types of objects relevant to our discussion are:
 
 Objects are stored in the `.git/objects` directory. You can go to any git repo
 and see any object using the following plumbing command:
-```
+```sh
 git cat-file -p 7108f7ecb345ee9d0084193f147cdad4d2998293
 ```
 
 The long string at the end is the object hash which is the key mentioned
 earlier. This is the SHA-1 hash of the contents of the objects and it is stored
 on disk like so:
-```
+```sh
 .git/objects/71/08f7ecb345ee9d0084193f147cdad4d2998293
 ```
 
@@ -227,7 +227,7 @@ Running `git log` shows us the commit we just created
 ## Conclusion
 
 Add a git remote of your choice like and push to it:
-```
+```sh
 git remote add origin git@github.com:s1dsq/basic-git-repo.git
 git push -u origin master
 ```
