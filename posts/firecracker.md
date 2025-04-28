@@ -82,9 +82,9 @@ An important additional security measure is wrapping the firecracker VMM around
 a jailer process that sandboxes the VMM and:
 
 - runs it in a _chroot_ environment
-- isolating it in _pid_ and networking namespaces
-- dropping privileges
-- setting a restrictive _seccomp\_bpf_ profile - whitelisting some syscalls
+- isolates it in _pid_ and networking namespaces
+- drops privileges
+- sets a restrictive _seccomp\_bpf_ profile - whitelisting some syscalls
 
 ## In AWS Lambda
 

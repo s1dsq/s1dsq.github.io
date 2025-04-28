@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 	<title>Siddharth's blog</title>
 	<link href="https://s1dsq.github.io/atom.xml" rel="self" />
-	<updated>2025-04-28T08:12:32Z</updated>
+	<updated>2025-04-28T08:23:48Z</updated>
 	<author>
 		<name>Siddharth Singh</name>
 	</author>
@@ -438,9 +438,9 @@ operations and ensuring that a small numbers of VMs don&#39;t hijack these resou
 a jailer process that sandboxes the VMM and:&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;runs it in a &lt;em&gt;chroot&lt;/em&gt; environment&lt;/li&gt;
-&lt;li&gt;isolating it in &lt;em&gt;pid&lt;/em&gt; and networking namespaces&lt;/li&gt;
-&lt;li&gt;dropping privileges&lt;/li&gt;
-&lt;li&gt;setting a restrictive &lt;em&gt;seccomp_bpf&lt;/em&gt; profile - whitelisting some syscalls&lt;/li&gt;
+&lt;li&gt;isolates it in &lt;em&gt;pid&lt;/em&gt; and networking namespaces&lt;/li&gt;
+&lt;li&gt;drops privileges&lt;/li&gt;
+&lt;li&gt;sets a restrictive &lt;em&gt;seccomp_bpf&lt;/em&gt; profile - whitelisting some syscalls&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h2&gt;In AWS Lambda&lt;/h2&gt;
 &lt;p&gt;Lambda provides &lt;em&gt;serverless functions&lt;/em&gt; which runs functions in response to

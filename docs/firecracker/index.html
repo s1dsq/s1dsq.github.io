@@ -85,9 +85,9 @@ operations and ensuring that a small numbers of VMs don't hijack these resources
 a jailer process that sandboxes the VMM and:</p>
 <ul>
 <li>runs it in a <em>chroot</em> environment</li>
-<li>isolating it in <em>pid</em> and networking namespaces</li>
-<li>dropping privileges</li>
-<li>setting a restrictive <em>seccomp_bpf</em> profile - whitelisting some syscalls</li>
+<li>isolates it in <em>pid</em> and networking namespaces</li>
+<li>drops privileges</li>
+<li>sets a restrictive <em>seccomp_bpf</em> profile - whitelisting some syscalls</li>
 </ul>
 <h2>In AWS Lambda</h2>
 <p>Lambda provides <em>serverless functions</em> which runs functions in response to
